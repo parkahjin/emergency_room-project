@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏥 부산 응급실 혼잡도 예측 서비스</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 헤더 -->
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">🏥 부산 응급실 혼잡도 예측</div>
+                <div class="location-info">
+                    📍 현재위치: 부산시 해운대구 우동
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="search-box">
+                    <input type="text" class="search-input" placeholder="병원명 또는 지역을 검색하세요..." id="mainSearchInput">
+                    <button class="search-btn" onclick="performSearch()">🔍 검색</button>
+                </div>
+                <button class="refresh-btn" onclick="refreshData()">🔄 새로고침</button>
+            </div>
+        </div>
+
+        <!-- 메인 컨텐츠 -->
+        <div class="main-content">
+            <!-- 지도 섹션 -->
+            <div class="map-section">
+                <div class="map-controls">
+                    <div class="control-group">
+                        <span>검색 반경:</span>
+                        <select class="radius-select" id="radiusSelect" onchange="updateRadius()">
+                            <option value="5">5km</option>
+                            <option value="10">10km</option>
+                            <option value="15">15km</option>
+                            <option value="20">20km</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="map-container">
+                    <div class="map-placeholder">
+                        🗺️ 부산 지역 응급실 지도<br>
+                        <small style="color: #888; font-size: 14px;">실제 구현 시 Folium 또는 Google Maps가 표시됩니다</small>
+                    </div>
+                    <div class="map-markers">
+                        <!-- 지도 마커들 -->
+                        <div class="marker green" style="top: 25%; left: 20%;" onclick="showDetail('ER001')" title="부산성모병원 - 여유"></div>
+                        <div class="marker yellow" style="top: 35%; left: 65%;" onclick="showDetail('ER002')" title="해운대백병원 - 보통"></div>
+                        <div class="marker red" style="top: 60%; left: 40%;" onclick="showDetail('ER003')" title="부산대학교병원 - 혼잡"></div>
+                        <div class="marker green" style="top: 20%; left: 75%;" onclick="showDetail('ER004')" title="고신대학교복음병원 - 여유"></div>
+                        <div class="marker yellow" style="top: 70%; left: 80%;" onclick="showDetail('ER005')" title="동아대학교병원 - 보통"></div>
+                        <div class="marker green" style="top: 45%; left: 15%;" onclick="showDetail('ER006')" title="동래부민병원 - 여유"></div>
+                        <div class="marker red" style="top: 80%; left: 60%;" onclick="showDetail('ER007')" title="부산의료원 - 혼잡"></div>
+                    </div>
+                </div>
+                
+                <div class="map-legend">
+                    <div class="legend-title">혼잡도 범례</div>
+                    <div class="legend-items">
+                        <div class="legend-item">
+                            <div class="legend-color green"></div>
+                            <span>여유 (대기 30분 이하)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color yellow"></div>
+                            <span>보통 (대기 30-60분)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color red"></div>
+                            <span>혼잡 (대기 60분 이상)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color gray"></div>
+                            <span>정보없음</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 사이드바 -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-title">📋 근처 응급실 (7개)</div>
+                    <div class="sort-controls">
+                        <button class="sort-btn active" onclick="sortBy('distance')">거리순</button>
+                        <button class="sort-btn" onclick="sortBy('congestion')">혼잡도순</button>
+                        <button class="sort-btn" onclick="sortBy('name')">병원명순</button>
+                    </div>
+                </div>
+                
+                <div class="hospital-list" id="hospitalList">
+                    <!-- 응급실 카드들 -->
+                    <div class="hospital-card" onclick="showDetail('ER001')">
+                        <div class="hospital-header">
+                            <div class="hospital-name-section">
+                                <div class="congestion-indicator green"></div>
+                                <div class="hospital-name">부산성모병원</div>
+                            </div>
+                            <div class="congestion-badge congestion-green">여유</div>
+                        </div>
+                        <div class="hospital-info">
+                            <div class="info-item">
+                                <span class="info-icon">📍</span>
+                                <span>1.2km</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">⏱️</span>
+                                <span>대기 15분</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🛏️</span>
+                                <span>병상 5/12</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🚗</span>
+                                <span>차량 5분</span>
+                            </div>
+                        </div>
+                        <div class="hospital-actions">
+                            <button class="detail-btn" onclick="event.stopPropagation(); showDetail('ER001')">상세보기</button>
+                            <button class="call-btn" onclick="event.stopPropagation(); makeCall('051-933-7114')">📞 전화</button>
+                        </div>
+                    </div>
+
+                    <div class="hospital-card" onclick="showDetail('ER002')">
+                        <div class="hospital-header">
+                            <div class="hospital-name-section">
+                                <div class="congestion-indicator yellow"></div>
+                                <div class="hospital-name">해운대백병원</div>
+                            </div>
+                            <div class="congestion-badge congestion-yellow">보통</div>
+                        </div>
+                        <div class="hospital-info">
+                            <div class="info-item">
+                                <span class="info-icon">📍</span>
+                                <span>2.3km</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">⏱️</span>
+                                <span>대기 30분</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🛏️</span>
+                                <span>병상 2/8</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🚗</span>
+                                <span>차량 8분</span>
+                            </div>
+                        </div>
+                        <div class="hospital-actions">
+                            <button class="detail-btn" onclick="event.stopPropagation(); showDetail('ER002')">상세보기</button>
+                            <button class="call-btn" onclick="event.stopPropagation(); makeCall('051-797-0100')">📞 전화</button>
+                        </div>
+                    </div>
+
+                    <div class="hospital-card" onclick="showDetail('ER003')">
+                        <div class="hospital-header">
+                            <div class="hospital-name-section">
+                                <div class="congestion-indicator red"></div>
+                                <div class="hospital-name">부산대학교병원</div>
+                            </div>
+                            <div class="congestion-badge congestion-red">혼잡</div>
+                        </div>
+                        <div class="hospital-info">
+                            <div class="info-item">
+                                <span class="info-icon">📍</span>
+                                <span>4.1km</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">⏱️</span>
+                                <span>대기 45분</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🛏️</span>
+                                <span>병상 3/15</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🚗</span>
+                                <span>차량 12분</span>
+                            </div>
+                        </div>
+                        <div class="hospital-actions">
+                            <button class="detail-btn" onclick="event.stopPropagation(); showDetail('ER003')">상세보기</button>
+                            <button class="call-btn" onclick="event.stopPropagation(); makeCall('051-240-7119')">📞 전화</button>
+                        </div>
+                    </div>
+
+                    <div class="hospital-card" onclick="showDetail('ER004')">
+                        <div class="hospital-header">
+                            <div class="hospital-name-section">
+                                <div class="congestion-indicator green"></div>
+                                <div class="hospital-name">고신대학교복음병원</div>
+                            </div>
+                            <div class="congestion-badge congestion-green">여유</div>
+                        </div>
+                        <div class="hospital-info">
+                            <div class="info-item">
+                                <span class="info-icon">📍</span>
+                                <span>5.8km</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">⏱️</span>
+                                <span>대기 20분</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🛏️</span>
+                                <span>병상 4/10</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🚗</span>
+                                <span>차량 15분</span>
+                            </div>
+                        </div>
+                        <div class="hospital-actions">
+                            <button class="detail-btn" onclick="event.stopPropagation(); showDetail('ER004')">상세보기</button>
+                            <button class="call-btn" onclick="event.stopPropagation(); makeCall('051-990-6114')">📞 전화</button>
+                        </div>
+
+                        </div>
+
+                    <div class="hospital-card" onclick="showDetail('ER005')">
+                        <div class="hospital-header">
+                            <div class="hospital-name-section">
+                                <div class="congestion-indicator yellow"></div>
+                                <div class="hospital-name">동아대학교병원</div>
+                            </div>
+                            <div class="congestion-badge congestion-yellow">보통</div>
+                        </div>
+                        <div class="hospital-info">
+                            <div class="info-item">
+                                <span class="info-icon">📍</span>
+                                <span>6.2km</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">⏱️</span>
+                                <span>대기 25분</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🛏️</span>
+                                <span>병상 1/6</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🚗</span>
+                                <span>차량 18분</span>
+                            </div>
+                        </div>
+                        <div class="hospital-actions">
+                            <button class="detail-btn" onclick="event.stopPropagation(); showDetail('ER005')">상세보기</button>
+                            <button class="call-btn" onclick="event.stopPropagation(); makeCall('051-240-2999')">📞 전화</button>
+                        </div>
+                    </div>
+
+                    <div class="hospital-card" onclick="showDetail('ER006')">
+                        <div class="hospital-header">
+                            <div class="hospital-name-section">
+                                <div class="congestion-indicator green"></div>
+                                <div class="hospital-name">동래부민병원</div>
+                            </div>
+                            <div class="congestion-badge congestion-green">여유</div>
+                        </div>
+                        <div class="hospital-info">
+                            <div class="info-item">
+                                <span class="info-icon">📍</span>
+                                <span>7.1km</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">⏱️</span>
+                                <span>대기 18분</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🛏️</span>
+                                <span>병상 6/9</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🚗</span>
+                                <span>차량 20분</span>
+                            </div>
+                        </div>
+                        <div class="hospital-actions">
+                            <button class="detail-btn" onclick="event.stopPropagation(); showDetail('ER006')">상세보기</button>
+                            <button class="call-btn" onclick="event.stopPropagation(); makeCall('051-850-8114')">📞 전화</button>
+                        </div>
+                    </div>
+
+                    <div class="hospital-card" onclick="showDetail('ER007')">
+                        <div class="hospital-header">
+                            <div class="hospital-name-section">
+                                <div class="congestion-indicator red"></div>
+                                <div class="hospital-name">부산의료원</div>
+                            </div>
+                            <div class="congestion-badge congestion-red">혼잡</div>
+                        </div>
+                        <div class="hospital-info">
+                            <div class="info-item">
+                                <span class="info-icon">📍</span>
+                                <span>8.3km</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">⏱️</span>
+                                <span>대기 55분</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🛏️</span>
+                                <span>병상 2/12</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">🚗</span>
+                                <span>차량 25분</span>
+                            </div>
+                        </div>
+                        <div class="hospital-actions">
+                            <button class="detail-btn" onclick="event.stopPropagation(); showDetail('ER007')">상세보기</button>
+                            <button class="call-btn" onclick="event.stopPropagation(); makeCall('051-607-2000')">📞 전화</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 상세 정보 모달 -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">부산성모병원 응급의료센터</div>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-content">
+                <div class="status-section">
+                    <div class="status-indicator-large green" id="modalStatusIndicator"></div>
+                    <div class="status-text-section">
+                        <h3 id="modalStatusText">현재 여유</h3>
+                        <p id="modalWaitTime">예상 대기시간: 15분</p>
+                    </div>
+                </div>
+
+                <div class="prediction-section">
+                    <div class="section-title">📊 혼잡도 예측</div>
+                    <div class="prediction-chart">
+                        혼잡도 예측 그래프<br>
+                        <small style="color: #888;">실제 구현 시 Chart.js나 D3.js 그래프가 표시됩니다</small>
+                    </div>
+                    <div class="time-tabs">
+                        <button class="time-tab active" onclick="selectTimeTab(this, '1hour')">1시간 후</button>
+                        <button class="time-tab" onclick="selectTimeTab(this, '2hour')">2시간 후</button>
+                        <button class="time-tab" onclick="selectTimeTab(this, '3hour')">3시간 후</button>
+                    </div>
+                </div>
+
+                <div class="info-grid">
+                    <div class="info-card">
+                        <h4>📍 주소</h4>
+                        <p id="modalAddress">부산시 남구 용호동 538-41</p>
+                    </div>
+                    <div class="info-card">
+                        <h4>📞 응급실 직통</h4>
+                        <p id="modalPhone">051-933-7114</p>
+                    </div>
+                    <div class="info-card">
+                        <h4>🚗 거리 및 소요시간</h4>
+                        <p id="modalDistance">1.2km (차량 약 5분)</p>
+                    </div>
+                    <div class="info-card">
+                        <h4>🛏️ 병상 현황</h4>
+                        <p id="modalBeds">사용가능: 5/12개</p>
+                    </div>
+                    <div class="info-card">
+                        <h4>👥 대기 환자</h4>
+                        <p id="modalPatients">총 8명 대기중</p>
+                    </div>
+                    <div class="info-card">
+                        <h4>🕐 업데이트</h4>
+                        <p id="modalLastUpdate">5분 전 업데이트</p>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="action-btn btn-primary" onclick="openDirections()">
+                        🚗 길찾기
+                    </button>
+                    <button class="action-btn btn-secondary" onclick="makeCallFromModal()">
+                        📞 전화걸기
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
