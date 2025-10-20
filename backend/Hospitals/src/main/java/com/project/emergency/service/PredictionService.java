@@ -80,6 +80,21 @@ public class PredictionService {
     }
 
     /**
+     * 특정 시간의 모든 병원 혼잡도 조회
+     */
+    public List<Prediction> getAllPredictionsByHour(Integer hour) {
+        if (hour < 0 || hour > 23) {
+            throw new IllegalArgumentException("시간은 0~23 사이여야 합니다.");
+        }
+
+        System.out.println(hour + "시 모든 병원 혼잡도 조회");
+        List<Prediction> predictions = predictionRepository.findByPredictionHour(hour);
+        System.out.println("조회된 병원 수: " + predictions.size());
+
+        return predictions;
+    }
+
+    /**
      * 특정 혼잡도 레벨의 병원 조회
      */
     public List<Prediction> getPredictionsByLevel(String level) {

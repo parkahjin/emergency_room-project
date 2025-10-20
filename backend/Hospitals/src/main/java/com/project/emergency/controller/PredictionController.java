@@ -12,7 +12,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/predictions")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "http://localhost:3000")
 public class PredictionController {
 
     private final PredictionService predictionService;
@@ -102,6 +102,30 @@ public class PredictionController {
                     "현재 시간 모든 병원 혼잡도 조회 성공 (" + predictions.size() + "개)",
                     predictions
             );
+        } catch (Exception e) {
+            return ApiResponse.error("혼잡도 조회 중 오류가 발생했습니다");
+        }
+    }
+
+    /**
+     * 특정 시간의 모든 병원 혼잡도 조회
+     * GET /api/predictions/hour/{hour}/all
+     *
+     * @param hour 시간 (0~23)
+     * @return 해당 시간의 모든 병원 혼잡도
+     */
+    @GetMapping("/hour/{hour}/all")
+    public ApiResponse<List<Prediction>> getAllPredictionsByHour(@PathVariable Integer hour) {
+        System.out.println("API 호출: " + hour + "시 모든 병원 혼잡도 조회");
+
+        try {
+            List<Prediction> predictions = predictionService.getAllPredictionsByHour(hour);
+            return ApiResponse.success(
+                    hour + "시 모든 병원 혼잡도 조회 성공 (" + predictions.size() + "개)",
+                    predictions
+            );
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(e.getMessage());
         } catch (Exception e) {
             return ApiResponse.error("혼잡도 조회 중 오류가 발생했습니다");
         }
