@@ -19,12 +19,12 @@ function App() {
   const [hospitals, setHospitals] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // 위치 관련 상태
+  // 위치 관련 상태 (양정인력개발센터 고정)
   const [userLocation, setUserLocation] = useState({
-    lat: 35.1796, // 기본값 (해운대)
-    lng: 129.0756
+    lat: 35.1697, // 부산 양정인력개발센터 (양정역 인근)
+    lng: 129.0704
   });
-  const [locationName, setLocationName] = useState('부산시 해운대구');
+  const [locationName, setLocationName] = useState('부산시 연제구');
 
   // 컴포넌트 마운트 시 실행
   useEffect(() => {
