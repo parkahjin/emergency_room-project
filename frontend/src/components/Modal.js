@@ -63,7 +63,7 @@ const Modal = ({ hospital, isOpen, onClose, onMakeCall, onOpenDirections }) => {
       if (!hospital?.id) return;
 
       try {
-        const response = await fetch(`http://localhost:8080/api/predictions/${hospital.id}/all`);
+        const response = await fetch(`/api/predictions/${hospital.id}/all`);
         const data = await response.json();
         
         if (data.status === 'success' && data.data) {

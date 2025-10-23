@@ -1,8 +1,8 @@
 // src/services/api.js
 import axios from 'axios';
 
-// 백엔드 API 기본 URL
-const API_BASE_URL = 'http://localhost:8080/api';
+// 백엔드 API 기본 URL (Nginx 프록시를 통해 접근)
+const API_BASE_URL = '/api';
 
 // Axios 인스턴스 생성
 const api = axios.create({

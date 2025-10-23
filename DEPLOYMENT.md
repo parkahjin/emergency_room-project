@@ -1,356 +1,285 @@
-# AWS Lightsail 배포 가이드 (MySQL 버전)
+# 응급실 혼잡도 예측 서비스 - 배포 가이드
 
-Emergency Room 프로젝트를 AWS Lightsail에 MySQL 기반으로 배포하는 가이드입니다.
-
-## 목차
-- [사전 준비사항](#사전-준비사항)
-- [1단계: Lightsail 인스턴스 생성](#1단계-lightsail-인스턴스-생성)
-- [2단계: 서버 초기 설정](#2단계-서버-초기-설정)
-- [3단계: MySQL 설치 및 데이터 임포트](#3단계-mysql-설치-및-데이터-임포트)
-- [4단계: 백엔드 배포](#4단계-백엔드-배포)
-- [5단계: 프론트엔드 배포](#5단계-프론트엔드-배포)
-- [6단계: Kakao API 도메인 등록](#6단계-kakao-api-도메인-등록)
-- [7단계: HTTPS 설정 (선택)](#7단계-https-설정-선택)
-- [문제 해결](#문제-해결)
+## 📋 목차
+1. [프로젝트 개요](#프로젝트-개요)
+2. [프로젝트 구조](#프로젝트-구조)
+3. [기술 스택](#기술-스택)
+4. [로컬 개발 환경](#로컬-개발-환경)
+5. [AWS Lightsail 배포](#aws-lightsail-배포)
+6. [환경 변수 설정](#환경-변수-설정)
+7. [트러블슈팅](#트러블슈팅)
 
 ---
 
-## 사전 준비사항
+## 프로젝트 개요
 
-### 필요한 것들
-- ✅ **AWS 계정** (무료 티어 사용 가능)
-- ✅ **Kakao Developers API 키** (재발급 완료)
-- ✅ **로컬 MySQL 데이터** (백업 준비)
-- ✅ **Git 저장소** (GitHub/GitLab)
+부산 지역 46개 응급실의 혼잡도를 실시간으로 예측하고 제공하는 웹 서비스입니다.
 
-### 예상 비용
-- **Lightsail 인스턴스**: $10/월 (2GB RAM, 1 vCPU, 60GB SSD) 권장
-- **첫 3개월 무료 크레딧** 제공 (신규 사용자)
-- **도메인** (선택사항): 약 $12/년
+**주요 기능:**
+- 실시간 응급실 혼잡도 예측 (여유/보통/혼잡)
+- 카카오 지도 기반 병원 위치 표시
+- 사용자 위치 기반 거리 및 소요시간 계산
+- 24시간 혼잡도 예측 그래프
+- 병원별 상세 정보 조회
 
----
-
-## 1단계: Lightsail 인스턴스 생성
-
-### 1.1. AWS Lightsail 콘솔 접속
-
-1. [AWS Lightsail Console](https://lightsail.aws.amazon.com/) 접속
-2. AWS 계정으로 로그인
-3. 리전 선택: **서울 (ap-northeast-2)** 권장
-
-### 1.2. 인스턴스 생성
-
-1. **"Create instance"** 버튼 클릭
-2. 다음 옵션 선택:
-   - **Instance location**: Seoul, Zone A (ap-northeast-2a)
-   - **Platform**: Linux/Unix
-   - **Blueprint**: OS Only → **Ubuntu 24.04 LTS**
-
-3. **인스턴스 플랜 선택**:
-   - 권장: **$10/월** (2GB RAM, 1 vCPU, 60GB SSD)
-   - 최소: **$5/월** (1GB RAM - MySQL + 백엔드 + 프론트엔드 모두 실행 시 여유 부족)
-
-4. **인스턴스 이름**: `emergency-room-server`
-
-5. **Create instance** 클릭 → 생성 대기 (약 1-2분)
-
-### 1.3. 고정 IP 할당
-
-1. 생성된 인스턴스 클릭
-2. **Networking** 탭으로 이동
-3. **Create static IP** 클릭
-4. 고정 IP 이름: `emergency-room-ip`
-5. **Create** 클릭
-6. **할당된 IP 주소 기록**: `xx.xx.xx.xx` (예: 13.125.123.45)
-
-### 1.4. 방화벽 설정
-
-**Networking** 탭 → **IPv4 Firewall** 섹션에서 다음 포트 열기:
-
-| 애플리케이션 | 프로토콜 | 포트 범위 | 소스 |
-|-------------|---------|----------|------|
-| SSH | TCP | 22 | 기본 열림 |
-| HTTP | TCP | 80 | 0.0.0.0/0 |
-| HTTPS | TCP | 443 | 0.0.0.0/0 |
-| Custom | TCP | 8080 | 0.0.0.0/0 |
-
-> **참고**: 8080 포트는 백엔드 API 테스트용. 나중에 Nginx 리버스 프록시 설정 후 닫을 수 있음.
+**데이터:**
+- 병원 수: 46개
+- 예측 데이터: 24시간 × 46개 = 1,104개 레코드
+- 머신러닝 모델: Random Forest (정확도 86.3%)
 
 ---
 
-## 2단계: 서버 초기 설정
+## 프로젝트 구조
 
-### 2.1. SSH 접속
-
-**방법 A: Lightsail 브라우저 터미널 (가장 간단)**
-1. 인스턴스 페이지에서 **Connect using SSH** 버튼 클릭
-2. 브라우저에서 터미널 열림
-
-**방법 B: 로컬 터미널 (SSH 클라이언트)**
-1. Lightsail 콘솔 → **Account** → **SSH keys** → 키 다운로드
-2. 로컬 터미널에서:
-```bash
-chmod 400 LightsailDefaultKey-ap-northeast-2.pem
-ssh -i LightsailDefaultKey-ap-northeast-2.pem ubuntu@xx.xx.xx.xx
 ```
-
-### 2.2. 시스템 업데이트
-
-```bash
-# 패키지 목록 업데이트
-sudo apt update
-
-# 설치된 패키지 업그레이드
-sudo apt upgrade -y
-
-# 재부팅 (커널 업데이트 시 필요할 수 있음)
-sudo reboot
-# 1-2분 후 다시 SSH 접속
-```
-
-### 2.3. 필수 소프트웨어 설치
-
-```bash
-# Java 21 설치 (백엔드용)
-sudo apt install -y openjdk-21-jdk
-
-# Git 설치
-sudo apt install -y git
-
-# Nginx 설치 (프론트엔드용)
-sudo apt install -y nginx
-
-# curl 설치 (API 테스트용)
-sudo apt install -y curl
-
-# 설치 확인
-java -version        # openjdk version "21.x.x"
-git --version        # git version 2.x.x
-nginx -v             # nginx version 1.x.x
+emergency_room/
+│
+├── backend/                          # Spring Boot 백엔드
+│   └── Hospitals/
+│       ├── src/
+│       │   ├── main/
+│       │   │   ├── java/com/project/emergency/
+│       │   │   │   ├── EmergencyApplication.java   # 메인 애플리케이션
+│       │   │   │   ├── common/                     # 공통 클래스
+│       │   │   │   │   └── ApiResponse.java        # API 응답 래퍼
+│       │   │   │   ├── config/                     # 설정
+│       │   │   │   │   └── WebConfig.java          # CORS 설정
+│       │   │   │   ├── controller/                 # REST API 컨트롤러
+│       │   │   │   │   ├── HospitalController.java    # 병원 API (6개)
+│       │   │   │   │   ├── PredictionController.java  # 예측 API (6개)
+│       │   │   │   │   └── KakaoController.java       # 카카오 API (4개)
+│       │   │   │   ├── entity/                     # JPA 엔티티
+│       │   │   │   │   ├── Hospital.java           # 병원 엔티티
+│       │   │   │   │   └── Prediction.java         # 예측 엔티티
+│       │   │   │   ├── repository/                 # JPA 레포지토리
+│       │   │   │   │   ├── HospitalRepository.java
+│       │   │   │   │   └── PredictionRepository.java
+│       │   │   │   └── service/                    # 비즈니스 로직
+│       │   │   │       ├── HospitalService.java
+│       │   │   │       ├── PredictionService.java
+│       │   │   │       └── KakaoApiService.java
+│       │   │   └── resources/
+│       │   │       ├── application.properties      # 애플리케이션 설정
+│       │   │       └── application.properties.example
+│       │   └── test/                               # 테스트 코드
+│       ├── build.gradle                            # Gradle 빌드 설정
+│       └── gradlew                                 # Gradle Wrapper
+│
+├── frontend/                         # React 프론트엔드
+│   ├── public/
+│   │   ├── index.html
+│   │   └── kakaomap.html                          # 카카오 맵 테스트 페이지
+│   ├── src/
+│   │   ├── components/                            # React 컴포넌트
+│   │   │   ├── Header.js                         # 헤더 (검색, 시간선택)
+│   │   │   ├── MapSection.js                     # 카카오 지도
+│   │   │   ├── Sidebar.js                        # 병원 목록 사이드바
+│   │   │   ├── HospitalCard.js                   # 병원 카드
+│   │   │   └── Modal.js                          # 병원 상세 모달
+│   │   ├── services/
+│   │   │   └── api.js                            # Axios API 클라이언트
+│   │   ├── styles/                               # CSS 스타일
+│   │   │   └── App.css
+│   │   ├── App.js                                # 메인 앱 컴포넌트
+│   │   └── index.js                              # React 진입점
+│   ├── package.json                              # npm 의존성
+│   └── build/                                    # 프로덕션 빌드 (배포용)
+│
+├── data-analysis/                    # 데이터 분석 및 ML
+│   ├── data/
+│   │   ├── processed/                            # 처리된 데이터
+│   │   └── simulated/                            # 시뮬레이션 데이터
+│   └── notebooks/                                # Jupyter 노트북
+│       ├── 01_data_collection.ipynb              # 데이터 수집
+│       ├── 02_import_to_mysql.ipynb             # MySQL 임포트
+│       ├── 04_insert_predictions.ipynb           # 예측 데이터 삽입
+│       └── 05_ml_training.ipynb                  # ML 모델 학습
+│
+├── CLAUDE.md                         # 프로젝트 가이드 (Claude Code용)
+├── DEPLOYMENT.md                     # 이 파일
+├── .gitignore
+└── README.md/                        # 프로젝트 문서
+    └── 응급실 혼잡도 예측 슬라이드.md
 ```
 
 ---
 
-## 3단계: MySQL 설치 및 데이터 임포트
+## 기술 스택
 
-### 3.1. MySQL 서버 설치
+### 백엔드
+- **Language**: Java 21
+- **Framework**: Spring Boot 3.5.6
+- **Database**: MySQL 8.0
+- **ORM**: Hibernate (Spring Data JPA)
+- **Build Tool**: Gradle 8.14.3
 
+### 프론트엔드
+- **Framework**: React 19.1.1
+- **HTTP Client**: Axios 1.12.2
+- **Map API**: Kakao Maps JavaScript API v3
+- **Charts**: Chart.js 4.5.1 + react-chartjs-2
+
+### 데이터 분석
+- **Language**: Python 3.13
+- **ML Library**: scikit-learn
+- **Data Processing**: pandas, numpy
+- **Environment**: Jupyter Notebook
+
+### 배포
+- **Server**: AWS Lightsail (Ubuntu)
+- **Web Server**: Nginx (정적 파일 서빙 + 리버스 프록시)
+- **Process Manager**: systemd (백엔드)
+- **SSL**: Self-Signed Certificate (개발용)
+
+---
+
+## 로컬 개발 환경
+
+### 필수 요구사항
+- Java 21 (JDK)
+- Node.js 18+ & npm
+- MySQL 8.0
+- Git
+
+### 1. 프로젝트 클론
 ```bash
-# MySQL 8.0 설치
-sudo apt install -y mysql-server
-
-# MySQL 서비스 시작 및 자동 시작 설정
-sudo systemctl start mysql
-sudo systemctl enable mysql
-
-# 상태 확인
-sudo systemctl status mysql
-# Active: active (running) 확인
+git clone <repository-url>
+cd emergency_room
 ```
 
-### 3.2. MySQL 보안 설정
+### 2. MySQL 데이터베이스 설정
+```sql
+CREATE DATABASE emergency_room CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'emergency_user'@'localhost' IDENTIFIED BY 'your_password';
+GRANT ALL PRIVILEGES ON emergency_room.* TO 'emergency_user'@'localhost';
+FLUSH PRIVILEGES;
+```
 
+### 3. 백엔드 실행
+
+#### 환경 변수 설정 (Windows PowerShell)
+```powershell
+$env:DB_HOST="localhost"
+$env:DB_PORT="3306"
+$env:DB_NAME="emergency_room"
+$env:DB_USERNAME="emergency_user"
+$env:DB_PASSWORD="your_password"
+$env:KAKAO_REST_API_KEY="your_kakao_rest_api_key"
+$env:KAKAO_JS_API_KEY="your_kakao_js_api_key"
+```
+
+#### 환경 변수 설정 (Linux/Mac)
 ```bash
-# MySQL 보안 설정 스크립트 실행
+export DB_HOST=localhost
+export DB_PORT=3306
+export DB_NAME=emergency_room
+export DB_USERNAME=emergency_user
+export DB_PASSWORD=your_password
+export KAKAO_REST_API_KEY=your_kakao_rest_api_key
+export KAKAO_JS_API_KEY=your_kakao_js_api_key
+```
+
+#### 백엔드 실행
+```bash
+cd backend/Hospitals
+./gradlew bootRun
+```
+
+**접속:** http://localhost:8080
+
+### 4. 프론트엔드 실행
+```bash
+cd frontend
+npm install
+npm start
+```
+
+**접속:** http://localhost:3000
+
+---
+
+## AWS Lightsail 배포
+
+### 아키텍처
+```
+[사용자]
+   ↓ HTTPS (443)
+[Nginx]
+   ├─→ / (정적 파일) → /home/ubuntu/emergency_room-project/frontend/build/
+   └─→ /api/* (프록시) → http://localhost:8080/api/*
+                              ↓
+                        [Spring Boot (8080)]
+                              ↓
+                        [MySQL (3306)]
+```
+
+### 1. Lightsail 인스턴스 생성
+- **OS**: Ubuntu 22.04 LTS
+- **플랜**: 최소 2GB RAM 권장
+- **방화벽**: 22 (SSH), 80 (HTTP), 443 (HTTPS), 8080 (백엔드) 포트 오픈
+
+### 2. 서버 접속 및 기본 설정
+```bash
+ssh ubuntu@<lightsail-ip>
+sudo apt update && sudo apt upgrade -y
+```
+
+### 3. Java 21 설치
+```bash
+sudo apt install openjdk-21-jdk -y
+java -version
+```
+
+### 4. MySQL 설치 및 설정
+```bash
+sudo apt install mysql-server -y
 sudo mysql_secure_installation
 
-# 질문에 대한 답변:
-# - Validate Password Component? → y (강력한 비밀번호 사용 권장)
-# - Password validation policy → 1 (MEDIUM)
-# - Set root password? → y → 강력한 비밀번호 입력
-# - Remove anonymous users? → y
-# - Disallow root login remotely? → y
-# - Remove test database? → y
-# - Reload privilege tables? → y
-```
-
-### 3.3. 데이터베이스 및 사용자 생성
-
-```bash
-# MySQL 접속 (root)
+# MySQL 접속
 sudo mysql
 
-# 또는 비밀번호 설정했다면:
-# sudo mysql -p
-```
-
-MySQL 프롬프트에서:
-
-```sql
--- 데이터베이스 생성
+# 데이터베이스 및 사용자 생성
 CREATE DATABASE emergency_room CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- 사용자 생성 (비밀번호는 강력하게 설정)
-CREATE USER 'emergency_user'@'localhost' IDENTIFIED BY 'your_strong_password_here';
-
--- 권한 부여
+CREATE USER 'emergency_user'@'localhost' IDENTIFIED BY 'strong_password_here';
 GRANT ALL PRIVILEGES ON emergency_room.* TO 'emergency_user'@'localhost';
-
--- 권한 적용
 FLUSH PRIVILEGES;
-
--- 확인
-SHOW DATABASES;
-SELECT user, host FROM mysql.user WHERE user='emergency_user';
-
--- 종료
 EXIT;
 ```
 
-### 3.4. 로컬 MySQL 데이터 백업 (로컬 PC에서)
-
+### 5. Node.js 및 npm 설치
 ```bash
-# 로컬 PC에서 MySQL 덤프 생성
-mysqldump -u root -p emergency_room > emergency_room_backup.sql
-
-# 파일 크기 확인
-ls -lh emergency_room_backup.sql
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+node -v
+npm -v
 ```
 
-### 3.5. 데이터를 서버로 전송
-
-**방법 A: SCP 사용 (로컬 PC에서)**
+### 6. 프로젝트 배포
 
 ```bash
-# SCP로 서버에 업로드
-scp -i LightsailDefaultKey-ap-northeast-2.pem emergency_room_backup.sql ubuntu@xx.xx.xx.xx:~/
-
-# 비밀번호: 엔터
-```
-
-**방법 B: Lightsail 브라우저 터미널 사용**
-1. 로컬 PC에서 `emergency_room_backup.sql` 파일 열기
-2. 내용 복사 (Ctrl+A, Ctrl+C)
-3. 서버에서:
-```bash
-nano emergency_room_backup.sql
-# 붙여넣기 (Ctrl+Shift+V)
-# 저장 (Ctrl+O, Enter, Ctrl+X)
-```
-
-### 3.6. 데이터 임포트 (서버에서)
-
-```bash
-# MySQL에 데이터 임포트
-mysql -u emergency_user -p emergency_room < emergency_room_backup.sql
-# 비밀번호 입력
-
-# 임포트 확인
-mysql -u emergency_user -p emergency_room -e "SHOW TABLES;"
-mysql -u emergency_user -p emergency_room -e "SELECT COUNT(*) FROM hospitals;"
-mysql -u emergency_user -p emergency_room -e "SELECT COUNT(*) FROM emergency_predictions;"
-
-# 예상 결과:
-# - hospitals: 46개
-# - emergency_predictions: 1104개 (46개 병원 × 24시간)
-```
-
----
-
-## 4단계: 백엔드 배포
-
-### 4.1. 프로젝트 클론
-
-```bash
-# 홈 디렉토리로 이동
+# 프로젝트 클론
 cd ~
+git clone <repository-url> emergency_room-project
+cd emergency_room-project
 
-# Git 저장소 클론
-git clone https://github.com/your-username/emergency_room.git
-
-# 디렉토리 이동
-cd emergency_room/backend/Hospitals
-
-# 확인
-ls -la
-# build.gradle, src, gradlew 등이 보여야 함
-```
-
-### 4.2. 환경변수 설정
-
-```bash
-# 환경변수 파일 편집
-sudo nano /etc/environment
-```
-
-다음 내용 **추가** (기존 PATH 등은 유지):
-
-```bash
-# Emergency Room Backend Configuration
-DB_HOST="localhost"
-DB_PORT="3306"
-DB_NAME="emergency_room"
-DB_USERNAME="emergency_user"
-DB_PASSWORD="your_strong_password_here"
-
-KAKAO_REST_API_KEY="b1f5dae2faba949439d3596afd13f283"
-KAKAO_JS_API_KEY="7456029734da4d8c307798205366c3ee"
-
-PORT="8080"
-```
-
-저장 후 종료: `Ctrl+O` → `Enter` → `Ctrl+X`
-
-환경변수 적용:
-
-```bash
-# 현재 세션에 적용
-source /etc/environment
-
-# 확인
-echo $DB_HOST
-echo $KAKAO_REST_API_KEY
-```
-
-### 4.3. application.properties 파일 생성
-
-```bash
-cd ~/emergency_room/backend/Hospitals/src/main/resources
-
-# application.properties.example을 복사
-cp application.properties.example application.properties
-
-# 확인 (환경변수가 제대로 설정되어 있으면 수정 불필요)
-cat application.properties
-```
-
-### 4.4. Gradle 빌드
-
-```bash
-cd ~/emergency_room/backend/Hospitals
-
-# Gradle 실행 권한 부여
+# 백엔드 빌드
+cd backend/Hospitals
 chmod +x gradlew
+./gradlew build -x test
 
-# 빌드 (테스트 제외)
-./gradlew clean build -x test
-
-# 시간이 좀 걸림 (첫 실행 시 의존성 다운로드)
-# BUILD SUCCESSFUL 메시지 확인
-
-# 생성된 JAR 파일 확인
-ls -lh build/libs/
-# demo-0.0.1-SNAPSHOT.jar 파일 확인
+# 프론트엔드 빌드
+cd ../../frontend
+npm install
+npm run build
 ```
 
-**빌드 오류 시:**
-```bash
-# Gradle 캐시 삭제 후 재시도
-rm -rf ~/.gradle/caches
-./gradlew clean build -x test --refresh-dependencies
-```
-
-### 4.5. systemd 서비스로 등록
-
-백엔드를 백그라운드 서비스로 실행하고 자동 재시작 설정:
+### 7. systemd 서비스 설정 (백엔드)
 
 ```bash
-# 서비스 파일 생성
-sudo nano /etc/systemd/system/emergency-backend.service
+sudo nano /etc/systemd/system/emergency-room-backend.service
 ```
 
-다음 내용 입력:
-
+**내용:**
 ```ini
 [Unit]
 Description=Emergency Room Backend Service
@@ -359,160 +288,64 @@ After=network.target mysql.service
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/home/ubuntu/emergency_room/backend/Hospitals
-EnvironmentFile=/etc/environment
-ExecStart=/usr/bin/java -Xmx768m -Xms512m -jar /home/ubuntu/emergency_room/backend/Hospitals/build/libs/demo-0.0.1-SNAPSHOT.jar
+WorkingDirectory=/home/ubuntu/emergency_room-project/backend/Hospitals
+ExecStart=/usr/bin/java -jar /home/ubuntu/emergency_room-project/backend/Hospitals/build/libs/Hospitals-0.0.1-SNAPSHOT.jar
 Restart=always
 RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=emergency-backend
+
+# 환경 변수
+Environment="DB_HOST=localhost"
+Environment="DB_PORT=3306"
+Environment="DB_NAME=emergency_room"
+Environment="DB_USERNAME=emergency_user"
+Environment="DB_PASSWORD=your_db_password"
+Environment="KAKAO_REST_API_KEY=your_kakao_rest_key"
+Environment="KAKAO_JS_API_KEY=your_kakao_js_key"
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-저장 후:
-
+**서비스 시작:**
 ```bash
-# systemd 데몬 리로드
 sudo systemctl daemon-reload
-
-# 서비스 활성화 (부팅 시 자동 시작)
-sudo systemctl enable emergency-backend
-
-# 서비스 시작
-sudo systemctl start emergency-backend
-
-# 상태 확인
-sudo systemctl status emergency-backend
-# Active: active (running) 확인
+sudo systemctl enable emergency-room-backend
+sudo systemctl start emergency-room-backend
+sudo systemctl status emergency-room-backend
 ```
 
-### 4.6. 백엔드 로그 확인
+### 8. Nginx 설치 및 설정
 
 ```bash
-# 실시간 로그 보기
-sudo journalctl -u emergency-backend -f
-
-# 최근 100줄 보기
-sudo journalctl -u emergency-backend -n 100
-
-# 종료: Ctrl+C
-```
-
-**성공 메시지 예시:**
-```
-Started EmergencyApplication in 15.234 seconds
-Tomcat started on port(s): 8080 (http)
-```
-
-### 4.7. API 테스트
-
-```bash
-# 헬스체크 (다른 터미널에서)
-curl http://localhost:8080/api/hospitals
-
-# 또는 외부에서
-curl http://xx.xx.xx.xx:8080/api/hospitals
-
-# JSON 응답 확인:
-# {"status":"success","message":"병원 목록 조회 성공 (46개)","data":[...]}
-```
-
----
-
-## 5단계: 프론트엔드 배포
-
-### 5.1. Node.js 설치
-
-```bash
-# nvm (Node Version Manager) 설치
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-
-# 환경변수 적용
-source ~/.bashrc
-
-# 또는
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-# Node.js 20 설치
-nvm install 20
-
-# 버전 확인
-node -v        # v20.x.x
-npm -v         # 10.x.x
-```
-
-### 5.2. 프론트엔드 .env 파일 생성
-
-```bash
-cd ~/emergency_room/frontend
-
-# .env.production 파일 생성
-cat > .env.production << 'EOF'
-REACT_APP_API_BASE_URL=/api
-REACT_APP_KAKAO_JS_KEY=7456029734da4d8c307798205366c3ee
-EOF
-
-# 확인
-cat .env.production
-```
-
-> **참고**: `REACT_APP_API_BASE_URL=/api`로 설정하면 Nginx 프록시를 통해 백엔드와 통신합니다.
-
-### 5.3. 프론트엔드 빌드
-
-```bash
-cd ~/emergency_room/frontend
-
-# 의존성 설치
-npm install
-
-# 프로덕션 빌드
-npm run build
-
-# 빌드 완료 확인 (약 1-2분 소요)
-ls -lh build/
-# index.html, static/ 디렉토리 확인
-```
-
-**빌드 오류 시:**
-```bash
-# 캐시 삭제 후 재시도
-rm -rf node_modules package-lock.json
-npm install
-npm run build
-```
-
-### 5.4. Nginx 설정
-
-```bash
-# Nginx 설정 파일 생성
+sudo apt install nginx -y
 sudo nano /etc/nginx/sites-available/emergency-room
 ```
 
-다음 내용 입력:
-
+**내용:**
 ```nginx
 server {
     listen 80;
     listen [::]:80;
-    server_name xx.xx.xx.xx;  # 실제 고정 IP로 변경
+    server_name 52.79.185.111;
 
-    root /var/www/emergency-room;
+    # HTTP to HTTPS redirect
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name 52.79.185.111;
+
+    # SSL 인증서 (Self-Signed)
+    ssl_certificate /etc/nginx/ssl/nginx-selfsigned.crt;
+    ssl_certificate_key /etc/nginx/ssl/nginx-selfsigned.key;
+
+    # React 정적 파일
+    root /home/ubuntu/emergency_room-project/frontend/build;
     index index.html;
 
-    # Gzip 압축 활성화
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css text/xml text/javascript
-               application/x-javascript application/xml+rss
-               application/javascript application/json image/svg+xml;
-
-    # React Router 지원 (SPA)
+    # 프론트엔드 - React Router 지원
     location / {
         try_files $uri $uri/ /index.html;
     }
@@ -524,489 +357,170 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
-        # 타임아웃 설정
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
+        proxy_cache_bypass $http_upgrade;
     }
 
     # 정적 파일 캐싱
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
-        access_log off;
     }
-
-    # 보안 헤더
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "no-referrer-when-downgrade" always;
-
-    # 로그
-    access_log /var/log/nginx/emergency-room-access.log;
-    error_log /var/log/nginx/emergency-room-error.log;
 }
 ```
 
-> **중요**: `server_name xx.xx.xx.xx;` 부분을 실제 고정 IP로 변경하세요!
-
-저장 후:
-
+**Self-Signed SSL 인증서 생성:**
 ```bash
-# 빌드 파일을 Nginx 디렉토리로 복사
-sudo mkdir -p /var/www/emergency-room
-sudo cp -r ~/emergency_room/frontend/build/* /var/www/emergency-room/
+sudo mkdir -p /etc/nginx/ssl
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/nginx/ssl/nginx-selfsigned.key \
+  -out /etc/nginx/ssl/nginx-selfsigned.crt
+```
 
-# 권한 설정
-sudo chown -R www-data:www-data /var/www/emergency-room
-sudo chmod -R 755 /var/www/emergency-room
-
-# Nginx 설정 활성화
+**Nginx 활성화:**
+```bash
 sudo ln -s /etc/nginx/sites-available/emergency-room /etc/nginx/sites-enabled/
-
-# 기본 사이트 비활성화 (선택)
-sudo rm -f /etc/nginx/sites-enabled/default
-
-# Nginx 설정 테스트
 sudo nginx -t
-# syntax is ok
-# test is successful
-
-# Nginx 재시작
 sudo systemctl restart nginx
 sudo systemctl enable nginx
-
-# 상태 확인
-sudo systemctl status nginx
 ```
 
-### 5.5. 프론트엔드 접속 테스트
-
-브라우저에서 접속:
-```
-http://xx.xx.xx.xx
-```
-
-**확인 사항:**
-- ✅ 카카오 지도가 표시되는지
-- ✅ 병원 리스트가 로드되는지
-- ✅ 브라우저 콘솔에 오류가 없는지 (F12)
-
-**문제 발생 시:**
+### 9. 방화벽 설정
 ```bash
-# Nginx 에러 로그 확인
-sudo tail -f /var/log/nginx/emergency-room-error.log
-
-# 백엔드 로그 확인
-sudo journalctl -u emergency-backend -n 50
-```
-
----
-
-## 6단계: Kakao API 도메인 등록
-
-### 6.1. Kakao Developers 설정
-
-1. [Kakao Developers](https://developers.kakao.com/) 접속 및 로그인
-2. **내 애플리케이션** → 해당 앱 선택
-3. 좌측 메뉴 → **플랫폼** 클릭
-
-### 6.2. 웹 플랫폼 설정
-
-**사이트 도메인 추가:**
-- 기존: `http://localhost:3000` (로컬 개발용)
-- **추가**: `http://xx.xx.xx.xx` (Lightsail 고정 IP)
-
-예시:
-```
-http://localhost:3000
-http://13.125.123.45
-```
-
-4. **저장** 클릭
-
-### 6.3. CORS 설정 확인 (선택)
-
-백엔드에서 CORS가 특정 도메인만 허용하도록 설정했다면:
-
-```bash
-cd ~/emergency_room/backend/Hospitals
-nano src/main/java/com/project/emergency/controller/PredictionController.java
-```
-
-15번째 줄 확인:
-```java
-@CrossOrigin(origins = "http://localhost:3000")
-```
-
-필요 시 수정:
-```java
-@CrossOrigin(origins = {"http://localhost:3000", "http://xx.xx.xx.xx"})
-```
-
-수정 후 다시 빌드 및 재시작:
-```bash
-./gradlew build -x test
-sudo systemctl restart emergency-backend
-```
-
----
-
-## 7단계: HTTPS 설정 (선택)
-
-도메인이 있는 경우 무료 SSL 인증서(Let's Encrypt) 적용 가능.
-
-### 7.1. 도메인 구매 및 DNS 설정
-
-1. **도메인 구매**: Route53, Namecheap, GoDaddy 등
-2. **DNS A 레코드 설정**:
-   - 호스트: `@` (또는 `www`)
-   - 타입: `A`
-   - 값: `xx.xx.xx.xx` (Lightsail 고정 IP)
-   - TTL: 300초
-
-예시:
-- `emergency-busan.com` → `13.125.123.45`
-- `www.emergency-busan.com` → `13.125.123.45`
-
-### 7.2. Certbot 설치
-
-```bash
-# Certbot 설치
-sudo apt install -y certbot python3-certbot-nginx
-
-# SSL 인증서 발급
-sudo certbot --nginx -d emergency-busan.com -d www.emergency-busan.com
-
-# 이메일 입력, 약관 동의 등
-# HTTPS 리디렉션 설정: Yes
-```
-
-### 7.3. Kakao Developers HTTPS 도메인 추가
-
-1. Kakao Developers → 플랫폼 설정
-2. 사이트 도메인 추가:
-   - `https://emergency-busan.com`
-   - `https://www.emergency-busan.com`
-
-### 7.4. 자동 갱신 확인
-
-```bash
-# 자동 갱신 테스트
-sudo certbot renew --dry-run
-
-# cron job 확인 (자동 설정됨)
-sudo systemctl status certbot.timer
-```
-
----
-
-## 문제 해결
-
-### 1. 백엔드가 시작되지 않음
-
-```bash
-# 로그 확인
-sudo journalctl -u emergency-backend -n 100 --no-pager
-
-# 일반적인 문제:
-# - MySQL 연결 실패: /etc/environment의 DB 설정 확인
-# - 포트 충돌: sudo lsof -i :8080
-# - 메모리 부족: free -h (스왑 메모리 추가 고려)
-```
-
-**MySQL 연결 오류:**
-```bash
-# MySQL 서비스 확인
-sudo systemctl status mysql
-
-# 사용자 권한 확인
-mysql -u emergency_user -p -e "SHOW DATABASES;"
-```
-
-### 2. 프론트엔드에서 API 호출 실패
-
-```bash
-# Nginx 에러 로그
-sudo tail -f /var/log/nginx/emergency-room-error.log
-
-# 백엔드 상태 확인
-curl http://localhost:8080/api/hospitals
-
-# Nginx 프록시 설정 확인
-sudo nginx -t
-```
-
-**502 Bad Gateway 오류:**
-- 백엔드가 실행 중인지 확인: `sudo systemctl status emergency-backend`
-- 방화벽 확인: `sudo ufw status` (비활성화 상태여야 함)
-
-### 3. 카카오 지도가 표시되지 않음
-
-**브라우저 콘솔 확인 (F12):**
-
-**오류: "appkey is not registered"**
-- Kakao Developers에서 도메인 등록 확인
-- `http://xx.xx.xx.xx` 형식으로 정확히 입력했는지 확인
-
-**오류: "CORS policy"**
-- 백엔드 `@CrossOrigin` 설정 확인
-- Nginx 프록시 설정 확인
-
-**public/index.html의 API 키 확인:**
-```bash
-cd ~/emergency_room/frontend
-grep "appkey" public/index.html
-# 7456029734da4d8c307798205366c3ee 확인
-```
-
-### 4. 데이터베이스 데이터 누락
-
-```bash
-# 테이블 확인
-mysql -u emergency_user -p emergency_room -e "SHOW TABLES;"
-
-# 데이터 개수 확인
-mysql -u emergency_user -p emergency_room -e "SELECT COUNT(*) FROM hospitals;"
-mysql -u emergency_user -p emergency_room -e "SELECT COUNT(*) FROM emergency_predictions;"
-
-# 데이터 재임포트
-mysql -u emergency_user -p emergency_room < ~/emergency_room_backup.sql
-```
-
-### 5. 메모리 부족 문제
-
-1GB RAM 인스턴스 사용 시:
-
-```bash
-# 메모리 확인
-free -h
-
-# 스왑 메모리 생성 (2GB)
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-
-# 영구 설정
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-
-# 확인
-free -h
-```
-
-### 6. 로그 파일 확인 명령어 모음
-
-```bash
-# 백엔드 로그 (실시간)
-sudo journalctl -u emergency-backend -f
-
-# Nginx 액세스 로그
-sudo tail -f /var/log/nginx/emergency-room-access.log
-
-# Nginx 에러 로그
-sudo tail -f /var/log/nginx/emergency-room-error.log
-
-# MySQL 에러 로그
-sudo tail -f /var/log/mysql/error.log
-
-# 시스템 전체 로그
-sudo journalctl -xe
-```
-
----
-
-## 유지보수
-
-### 코드 업데이트 시
-
-**백엔드 업데이트:**
-```bash
-cd ~/emergency_room
-git pull
-
-cd backend/Hospitals
-./gradlew clean build -x test
-sudo systemctl restart emergency-backend
-
-# 로그 확인
-sudo journalctl -u emergency-backend -f
-```
-
-**프론트엔드 업데이트:**
-```bash
-cd ~/emergency_room
-git pull
-
-cd frontend
-npm run build
-
-sudo rm -rf /var/www/emergency-room/*
-sudo cp -r build/* /var/www/emergency-room/
-sudo systemctl reload nginx
-```
-
-### 서비스 관리 명령어
-
-```bash
-# 백엔드
-sudo systemctl status emergency-backend   # 상태 확인
-sudo systemctl start emergency-backend    # 시작
-sudo systemctl stop emergency-backend     # 중지
-sudo systemctl restart emergency-backend  # 재시작
-
-# Nginx
-sudo systemctl status nginx
-sudo systemctl reload nginx    # 설정만 리로드 (다운타임 없음)
-sudo systemctl restart nginx   # 완전 재시작
-
-# MySQL
-sudo systemctl status mysql
-sudo systemctl restart mysql
-```
-
-### 모니터링
-
-**디스크 사용량:**
-```bash
-df -h
-du -sh ~/emergency_room/*
-```
-
-**메모리 사용량:**
-```bash
-free -h
-top
-htop  # sudo apt install htop
-```
-
-**네트워크 연결:**
-```bash
-sudo netstat -tlnp | grep -E '80|8080|3306'
-```
-
----
-
-## 백업 및 복구
-
-### 데이터베이스 백업
-
-```bash
-# 자동 백업 스크립트 생성
-mkdir -p ~/backups
-
-cat > ~/backup-db.sh << 'EOF'
-#!/bin/bash
-BACKUP_DIR=~/backups
-DATE=$(date +%Y%m%d_%H%M%S)
-mysqldump -u emergency_user -p'your_password' emergency_room > $BACKUP_DIR/emergency_room_$DATE.sql
-find $BACKUP_DIR -name "*.sql" -mtime +7 -delete
-EOF
-
-chmod +x ~/backup-db.sh
-
-# cron으로 매일 자동 백업 (새벽 2시)
-crontab -e
-# 다음 줄 추가:
-# 0 2 * * * /home/ubuntu/backup-db.sh
-```
-
-### 복구
-
-```bash
-mysql -u emergency_user -p emergency_room < ~/backups/emergency_room_20241020_020000.sql
-```
-
----
-
-## 성능 최적화
-
-### Nginx 캐싱 설정 추가
-
-```bash
-sudo nano /etc/nginx/nginx.conf
-```
-
-`http {}` 블록 안에 추가:
-```nginx
-# 캐시 설정
-proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=api_cache:10m max_size=100m inactive=60m;
-```
-
-### Java 힙 메모리 조정
-
-```bash
-sudo nano /etc/systemd/system/emergency-backend.service
-```
-
-`ExecStart` 라인 수정:
-```ini
-# 2GB RAM 인스턴스: -Xmx768m -Xms512m
-# 1GB RAM 인스턴스: -Xmx512m -Xms256m
-ExecStart=/usr/bin/java -Xmx768m -Xms512m -jar ...
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl restart emergency-backend
-```
-
----
-
-## 보안 권장사항
-
-1. **방화벽 활성화 (선택):**
-```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 'Nginx Full'
+sudo ufw allow 22/tcp      # SSH
+sudo ufw allow 80/tcp      # HTTP
+sudo ufw allow 443/tcp     # HTTPS
 sudo ufw enable
 ```
 
-2. **SSH 키 인증 강화:**
-   - 비밀번호 로그인 비활성화
-   - 루트 로그인 비활성화
+### 10. 배포 확인
+- 브라우저에서 `https://52.79.185.111/` 접속
+- Self-Signed 인증서 경고 무시하고 진행
+- 지도에 병원 마커와 사이드바에 병원 카드가 표시되는지 확인
 
-3. **정기 업데이트:**
+---
+
+## 환경 변수 설정
+
+### 백엔드 환경 변수
+| 변수명 | 설명 | 기본값 | 필수 |
+|--------|------|--------|------|
+| `DB_HOST` | MySQL 호스트 | localhost | ✓ |
+| `DB_PORT` | MySQL 포트 | 3306 | ✓ |
+| `DB_NAME` | 데이터베이스 이름 | emergency_room | ✓ |
+| `DB_USERNAME` | DB 사용자명 | root | ✓ |
+| `DB_PASSWORD` | DB 비밀번호 | 1234 | ✓ |
+| `KAKAO_REST_API_KEY` | Kakao REST API 키 | - | ✓ |
+| `KAKAO_JS_API_KEY` | Kakao JavaScript 키 | - | ✓ |
+
+### 카카오 API 키 발급
+1. [Kakao Developers](https://developers.kakao.com) 접속
+2. 애플리케이션 생성
+3. **내 애플리케이션 > 앱 키**에서 REST API 키, JavaScript 키 확인
+4. **플랫폼 설정**에서 웹 사이트 도메인 등록:
+   - 로컬: `http://localhost:3000`
+   - 배포: `https://52.79.185.111`
+
+---
+
+## 트러블슈팅
+
+### 1. 백엔드가 시작되지 않음
 ```bash
-sudo apt update && sudo apt upgrade -y
+# 로그 확인
+sudo journalctl -u emergency-room-backend -f
+
+# 포트 확인
+sudo netstat -tuln | grep 8080
+
+# Java 프로세스 확인
+ps aux | grep java
 ```
 
-4. **로그 모니터링:**
+### 2. 프론트엔드에서 API 호출 실패
+- **증상**: 브라우저 콘솔에 CORS 에러
+- **해결**:
+  - 백엔드 `WebConfig.java`에서 CORS 설정 확인
+  - `allowedOrigins`에 `https://52.79.185.111` 추가 확인
+  - 백엔드 재시작: `sudo systemctl restart emergency-room-backend`
+
+### 3. 카카오 지도가 표시되지 않음
+- **원인**: Kakao JavaScript 키 미등록 또는 도메인 불일치
+- **해결**:
+  1. Kakao Developers에서 웹 플랫폼 도메인 등록 확인
+  2. `index.html`에 올바른 JavaScript 키 사용 확인
+  3. 브라우저 개발자 도구 콘솔에서 에러 메시지 확인
+
+### 4. 병원 데이터가 표시되지 않음
 ```bash
-sudo apt install -y fail2ban
-sudo systemctl enable fail2ban
+# MySQL 데이터 확인
+mysql -u emergency_user -p emergency_room
+
+SELECT COUNT(*) FROM hospitals;        # 46개 확인
+SELECT COUNT(*) FROM emergency_predictions;  # 1104개 확인
+```
+
+### 5. Nginx 502 Bad Gateway
+- **원인**: 백엔드가 실행되지 않음
+- **해결**:
+```bash
+sudo systemctl status emergency-room-backend
+sudo systemctl start emergency-room-backend
+```
+
+### 6. 빌드 후 변경사항이 반영되지 않음
+```bash
+# 프론트엔드 재빌드
+cd ~/emergency_room-project/frontend
+rm -rf build
+npm run build
+
+# Nginx 캐시 클리어
+sudo systemctl reload nginx
+
+# 브라우저 캐시 강제 새로고침: Ctrl + Shift + R
 ```
 
 ---
 
-## 참고 자료
+## 업데이트 배포 프로세스
 
-- [AWS Lightsail 공식 문서](https://lightsail.aws.amazon.com/ls/docs)
-- [Kakao Maps API 가이드](https://apis.map.kakao.com/web/guide/)
-- [Spring Boot 배포 가이드](https://docs.spring.io/spring-boot/docs/current/reference/html/deployment.html)
-- [Nginx 공식 문서](https://nginx.org/en/docs/)
-- [MySQL 8.0 문서](https://dev.mysql.com/doc/refman/8.0/en/)
+### 코드 변경 후 재배포
+
+```bash
+# 1. 서버 접속
+ssh ubuntu@52.79.185.111
+
+# 2. 최신 코드 가져오기
+cd ~/emergency_room-project
+git pull origin main
+
+# 3. 백엔드 재빌드 및 재시작
+cd backend/Hospitals
+./gradlew build -x test
+sudo systemctl restart emergency-room-backend
+
+# 4. 프론트엔드 재빌드
+cd ../../frontend
+npm install  # 의존성 변경 시만
+npm run build
+
+# 5. Nginx 재시작
+sudo systemctl reload nginx
+
+# 6. 확인
+sudo systemctl status emergency-room-backend
+curl -I https://52.79.185.111
+```
 
 ---
 
-## 체크리스트
-
-배포 완료 후 확인:
-
-- [ ] Lightsail 인스턴스 생성 및 고정 IP 할당
-- [ ] MySQL 설치 및 데이터 임포트 완료
-- [ ] 백엔드 API 정상 작동 (`http://xx.xx.xx.xx:8080/api/hospitals`)
-- [ ] 프론트엔드 정상 표시 (`http://xx.xx.xx.xx`)
-- [ ] 카카오 지도 정상 렌더링
-- [ ] Kakao Developers에 도메인 등록
-- [ ] **모바일에서 GPS 기반 위치 테스트** 🎯
+## 라이선스
+이 프로젝트는 학습 및 포트폴리오 목적으로 제작되었습니다.
 
 ---
 
-**🎉 배포 완료! 이제 모바일에서 `http://xx.xx.xx.xx`로 접속해서 GPS 기능을 테스트하세요!**
+## 문의
+프로젝트 관련 문의사항이 있으시면 GitHub Issues를 이용해주세요.

@@ -33,46 +33,15 @@ function App() {
     fetchHospitalsData();
   }, []);
 
-  // 현재 위치 가져오기 함수 (GPS 기반)
+  // 고정 위치 사용 (부산 양정인력개발센터)
   const getCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const newLocation = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          setUserLocation(newLocation);
-          console.log('📍 GPS 위치 획득:', newLocation);
-          getAddressFromCoords(newLocation.lat, newLocation.lng);
-        },
-        (error) => {
-          console.error('위치 정보 가져오기 실패:', error);
-          console.log('⚠️ 기본 위치(양정역)로 설정합니다.');
-          // 위치 권한 거부 또는 오류 시 양정역으로 폴백
-          const fallbackLocation = {
-            lat: 35.1697,  // 양정역
-            lng: 129.0704
-          };
-          setUserLocation(fallbackLocation);
-          getAddressFromCoords(fallbackLocation.lat, fallbackLocation.lng);
-        },
-        {
-          enableHighAccuracy: true,  // GPS 정확도 향상
-          timeout: 10000,             // 10초 타임아웃
-          maximumAge: 0               // 캐시된 위치 사용 안 함
-        }
-      );
-    } else {
-      console.log('❌ Geolocation API를 지원하지 않는 브라우저입니다.');
-      // Geolocation 미지원 시 양정역으로 폴백
-      const fallbackLocation = {
-        lat: 35.1697,
-        lng: 129.0704
-      };
-      setUserLocation(fallbackLocation);
-      getAddressFromCoords(fallbackLocation.lat, fallbackLocation.lng);
-    }
+    const fixedLocation = {
+      lat: 35.1697,  // 부산 양정인력개발센터 (양정역 인근)
+      lng: 129.0704
+    };
+    setUserLocation(fixedLocation);
+    getAddressFromCoords(fixedLocation.lat, fixedLocation.lng);
+    console.log('📍 고정 위치 사용:', fixedLocation);
   };
 
   // 좌표를 주소로 변환
@@ -258,7 +227,7 @@ const fetchHospitalsData = async () => {
     try {
       setLoading(true);
       
-      const response = await fetch(`http://localhost:8080/api/predictions/hour/${hour}/all`);
+      const response = await fetch(`/api/predictions/hour/${hour}/all`);
       const predictionsData = await response.json();
       
       if (predictionsData.status === 'success') {
@@ -335,13 +304,13 @@ const fetchHospitalsData = async () => {
     try {
       setLoading(true);
       
-      const response = await fetch(`http://localhost:8080/api/hospitals/search?keyword=${encodeURIComponent(term)}`);
+      const response = await fetch(`/api/hospitals/search?keyword=${encodeURIComponent(term)}`);
       const searchData = await response.json();
       
       if (searchData.status === 'success') {
         let hospitalData = searchData.data;
         
-        const predictionsResponse = await fetch(`http://localhost:8080/api/predictions/hour/${selectedHour}/all`);
+        const predictionsResponse = await fetch(`/api/predictions/hour/${selectedHour}/all`);
         const predictionsData = await predictionsResponse.json();
         
         if (predictionsData.status === 'success') {
