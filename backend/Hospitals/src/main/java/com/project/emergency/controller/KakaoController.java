@@ -15,7 +15,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/kakao")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {"https://52.79.185.111", "http://localhost:3000"})
 public class KakaoController {
 
     private final KakaoApiService kakaoApiService;

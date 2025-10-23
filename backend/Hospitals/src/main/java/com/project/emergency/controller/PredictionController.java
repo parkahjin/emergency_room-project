@@ -12,7 +12,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/predictions")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {"https://52.79.185.111", "http://localhost:3000"})
 public class PredictionController {
 
     private final PredictionService predictionService;
