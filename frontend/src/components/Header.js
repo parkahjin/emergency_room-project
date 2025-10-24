@@ -1,9 +1,14 @@
 // src/components/Header.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const Header = ({ searchTerm, onSearch, onRefresh, onTimeChange, selectedHour, locationName  }) => {
   const [inputValue, setInputValue] = useState(searchTerm || '');
-  
+
+  // searchTerm prop 변경 시 inputValue 동기화
+  useEffect(() => {
+    setInputValue(searchTerm || '');
+  }, [searchTerm]);
+
   // 현재 시간
   const currentHour = new Date().getHours();
 

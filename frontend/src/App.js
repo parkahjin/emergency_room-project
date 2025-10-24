@@ -214,9 +214,10 @@ const fetchHospitalsData = async () => {
     }
   };
 
-  // 병원 데이터 로딩 후 현재 시간으로 강제 업데이트
+  // 병원 데이터 로딩 후 현재 시간으로 강제 업데이트 (초기 로딩 시에만)
   useEffect(() => {
-    if (hospitals.length > 0 && !loading) {
+    // searchTerm이 비어있을 때만 실행 (검색 중이 아닐 때)
+    if (hospitals.length > 0 && !loading && !searchTerm) {
       const currentHour = new Date().getHours();
       if (selectedHour === currentHour) {
         console.log('🔄 초기 로딩 완료 - 현재 시간 혼잡도 재조회');
@@ -247,13 +248,13 @@ const fetchHospitalsData = async () => {
       
       if (searchData.status === 'success') {
         let hospitalData = searchData.data;
-        
+
         const predictionsResponse = await fetch(`/api/predictions/hour/${selectedHour}/all`);
         const predictionsData = await predictionsResponse.json();
-        
+
         if (predictionsData.status === 'success') {
           const predictions = predictionsData.data;
-          
+
           hospitalData = hospitalData.map(hospital => {
             const prediction = predictions.find(p => p.hospitalId === hospital.id);
             return {
@@ -262,17 +263,17 @@ const fetchHospitalsData = async () => {
             };
           });
         }
-        
+
         // userLocation 사용
         hospitalData = addDistanceToHospitals(
           hospitalData,
           userLocation.lat,
           userLocation.lng
         );
-        
+
         const formattedHospitals = hospitalData.map(hospital => {
           let congestionColor = 'gray';
-          
+
           if (hospital.prediction && hospital.prediction.congestionLevel) {
             const level = hospital.prediction.congestionLevel;
             if (level === '여유') {
@@ -283,29 +284,35 @@ const fetchHospitalsData = async () => {
               congestionColor = 'red';
             }
           }
-          
+
           return {
             ...hospital,
             congestion: congestionColor,
             status: hospital.prediction?.congestionLevel || '정보없음',
-            waitTime: hospital.prediction?.predictedWaitTime 
-              ? `${hospital.prediction.predictedWaitTime}분` 
+            waitTime: hospital.prediction?.predictedWaitTime
+              ? `${hospital.prediction.predictedWaitTime}분`
               : '정보없음',
             beds: hospital.bedsTotal || 0,
             distance: hospital.distanceText,
             driveTime: hospital.driveTime
           };
         });
-        
+
         setHospitals(formattedHospitals);
         console.log(`검색 결과: ${formattedHospitals.length}개 병원`);
-        
+
         if (formattedHospitals.length === 0) {
           alert('검색 결과가 없습니다.');
         }
+      } else {
+        // 검색 결과 없음 - 빈 배열로 설정
+        setHospitals([]);
+        console.log('❌ 검색 실패 또는 결과 없음:', searchData.message);
+        alert(searchData.message || '검색 결과가 없습니다.');
       }
     } catch (error) {
       console.error('검색 실패:', error);
+      setHospitals([]); // 에러 발생 시 빈 배열로 설정
       alert('검색 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -335,6 +342,7 @@ const fetchHospitalsData = async () => {
   // 데이터 새로고침
   const handleRefresh = () => {
     console.log('🔄 데이터 새로고침');
+    setSearchTerm(''); // 검색어 초기화
     if (selectedHour !== new Date().getHours()) {
       handleTimeChange(selectedHour);
     } else {

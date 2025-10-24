@@ -6,20 +6,18 @@ const HospitalCard = ({ hospital, onHospitalClick, onCallClick, userLocation, on
   const [routeInfo, setRouteInfo] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // 카카오 경로 정보 가져오기
+  // 카카오 경로 정보 가져오기 (이미 App.js에서 계산된 경우 호출하지 않음)
   useEffect(() => {
-    // 디버깅용 로그
-    console.log('HospitalCard 렌더링:', {
-      hospitalId: hospital?.id,
-      hospitalName: hospital?.name,
-      userLat: userLocation?.lat,
-      userLng: userLocation?.lng
-    });
-
-    if (hospital?.id && userLocation?.lat && userLocation?.lng) {
-      fetchRouteInfo();
+    // hospital.distance가 이미 있으면 경로 정보 조회하지 않음 (App.js에서 이미 계산됨)
+    if (hospital?.distance && hospital?.driveTime) {
+      console.log(`${hospital.name}: 이미 계산된 경로 정보 사용`);
+      return;
     }
-  }, [hospital?.id, userLocation?.lat, userLocation?.lng]);
+
+    // distance가 없는 경우에만 경로 조회 (하지만 API 한도 문제로 호출하지 않음)
+    // App.js에서 상위 10개만 계산하므로, 나머지는 직선거리 사용
+    console.log(`${hospital.name}: 직선거리 사용 (${hospital.distance})`);
+  }, [hospital?.id, hospital?.distance, hospital?.driveTime]);
 
   const fetchRouteInfo = async () => {
     setLoading(true);
