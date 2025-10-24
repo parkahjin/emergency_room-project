@@ -40,87 +40,8 @@ function App() {
       lng: 129.0704
     };
     setUserLocation(fixedLocation);
-    // getAddressFromCoords(fixedLocation.lat, fixedLocation.lng); // 주석 처리: 초기 state 값 사용
     console.log('📍 고정 위치 사용:', fixedLocation);
   };
-
-  // 좌표를 주소로 변환
-  const getAddressFromCoords = (lat, lng) => {
-  console.log(`좌표: 위도 ${lat}, 경도 ${lng}`);
-  
-  // 부산 16개 구/군 전체
-  if (lat >= 35.05 && lat <= 35.35 && lng >= 128.85 && lng <= 129.30) {
-    // 해운대구
-    if (lat >= 35.14 && lat <= 35.23 && lng >= 129.07 && lng <= 129.20) {
-      setLocationName('부산시 해운대구');
-    }
-    // 수영구
-    else if (lat >= 35.13 && lat <= 35.17 && lng >= 129.06 && lng <= 129.13) {
-      setLocationName('부산시 수영구');
-    }
-    // 부산진구
-    else if (lat >= 35.14 && lat <= 35.19 && lng >= 129.02 && lng <= 129.07) {
-      setLocationName('부산시 부산진구');
-    }
-    // 동래구
-    else if (lat >= 35.19 && lat <= 35.23 && lng >= 129.05 && lng <= 129.10) {
-      setLocationName('부산시 동래구');
-    }
-    // 남구
-    else if (lat >= 35.10 && lat <= 35.15 && lng >= 129.02 && lng <= 129.10) {
-      setLocationName('부산시 남구');
-    }
-    // 연제구
-    else if (lat >= 35.17 && lat <= 35.21 && lng >= 129.03 && lng <= 129.09) {
-      setLocationName('부산시 연제구');
-    }
-    // 금정구
-    else if (lat >= 35.21 && lat <= 35.28 && lng >= 129.02 && lng <= 129.10) {
-      setLocationName('부산시 금정구');
-    }
-    // 기장군
-    else if (lat >= 35.18 && lat <= 35.35 && lng >= 129.10 && lng <= 129.30) {
-      setLocationName('부산시 기장군');
-    }
-    // 서구
-    else if (lat >= 35.08 && lat <= 35.11 && lng >= 128.96 && lng <= 129.00) {
-      setLocationName('부산시 서구');
-    }
-    // 중구
-    else if (lat >= 35.09 && lat <= 35.11 && lng >= 129.02 && lng <= 129.04) {
-      setLocationName('부산시 중구');
-    }
-    // 동구
-    else if (lat >= 35.11 && lat <= 35.14 && lng >= 129.03 && lng <= 129.06) {
-      setLocationName('부산시 동구');
-    }
-    // 영도구
-    else if (lat >= 35.06 && lat <= 35.09 && lng >= 128.99 && lng <= 129.08) {
-      setLocationName('부산시 영도구');
-    }
-    // 사하구
-    else if (lat >= 35.05 && lat <= 35.11 && lng >= 128.93 && lng <= 129.00) {
-      setLocationName('부산시 사하구');
-    }
-    // 사상구
-    else if (lat >= 35.13 && lat <= 35.18 && lng >= 128.95 && lng <= 129.01) {
-      setLocationName('부산시 사상구');
-    }
-    // 북구
-    else if (lat >= 35.19 && lat <= 35.28 && lng >= 128.94 && lng <= 129.03) {
-      setLocationName('부산시 북구');
-    }
-    // 강서구
-    else if (lat >= 35.05 && lat <= 35.21 && lng >= 128.85 && lng <= 128.98) {
-      setLocationName('부산시 강서구');
-    }
-    else {
-      setLocationName('부산광역시');
-    }
-  } else {
-    setLocationName('부산 외 지역');
-  }
-};
 
 const fetchHospitalsData = async () => {
   try {
