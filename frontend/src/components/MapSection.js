@@ -6,6 +6,8 @@ const MapSection = ({ hospitals, onMarkerClick, userLocation }) => {
   const [map, setMap] = useState(null);
   const [clusterer, setClusterer] = useState(null);
   const infowindowRef = useRef(null);
+  const userMarkerRef = useRef(null);
+  const userOverlayRef = useRef(null);
 
   // 카카오맵 초기화
   useEffect(() => {
@@ -167,6 +169,98 @@ const MapSection = ({ hospitals, onMarkerClick, userLocation }) => {
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [onMarkerClick]);
+
+  // 현재 위치 마커 표시
+  useEffect(() => {
+    if (!map || !userLocation) return;
+
+    // 기존 마커 제거
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setMap(null);
+    }
+    if (userOverlayRef.current) {
+      userOverlayRef.current.setMap(null);
+    }
+
+    // 현재 위치 마커 이미지 (파란색 핀 모양)
+    const userMarkerSrc = 'data:image/svg+xml;base64,' + btoa(`
+      <svg width="40" height="50" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+            <feOffset dx="0" dy="2" result="offsetblur"/>
+            <feComponentTransfer>
+              <feFuncA type="linear" slope="0.3"/>
+            </feComponentTransfer>
+            <feMerge>
+              <feMergeNode/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+        <path d="M20 5 C13 5 7 11 7 18 C7 27 20 45 20 45 C20 45 33 27 33 18 C33 11 27 5 20 5 Z"
+              fill="#4299e1" stroke="white" stroke-width="3" filter="url(#shadow)"/>
+        <circle cx="20" cy="18" r="6" fill="white"/>
+        <circle cx="20" cy="18" r="3" fill="#4299e1"/>
+      </svg>
+    `);
+
+    const userMarkerSize = new window.kakao.maps.Size(40, 50);
+    const userMarkerImage = new window.kakao.maps.MarkerImage(userMarkerSrc, userMarkerSize);
+
+    const userPosition = new window.kakao.maps.LatLng(userLocation.lat, userLocation.lng);
+
+    // 현재 위치 마커 생성
+    const userMarker = new window.kakao.maps.Marker({
+      position: userPosition,
+      image: userMarkerImage,
+      zIndex: 1000 // 병원 마커보다 위에 표시
+    });
+
+    userMarker.setMap(map);
+    userMarkerRef.current = userMarker;
+
+    // "현재위치" 텍스트 오버레이
+    const overlayContent = `
+      <div style="
+        position: relative;
+        bottom: 60px;
+        background: #4299e1;
+        color: white;
+        padding: 6px 12px;
+        border-radius: 16px;
+        font-size: 13px;
+        font-weight: 600;
+        box-shadow: 0 3px 8px rgba(66, 153, 225, 0.4);
+        white-space: nowrap;
+        border: 2px solid white;
+      ">
+        📍 현재위치
+      </div>
+    `;
+
+    const customOverlay = new window.kakao.maps.CustomOverlay({
+      position: userPosition,
+      content: overlayContent,
+      yAnchor: 1,
+      zIndex: 999
+    });
+
+    customOverlay.setMap(map);
+    userOverlayRef.current = customOverlay;
+
+    console.log('✅ 현재 위치 마커 표시:', userLocation);
+
+    // 정리 함수
+    return () => {
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setMap(null);
+      }
+      if (userOverlayRef.current) {
+        userOverlayRef.current.setMap(null);
+      }
+    };
+  }, [map, userLocation]);
 
   // 내 위치로 이동 버튼
   const handleCenterToUser = () => {

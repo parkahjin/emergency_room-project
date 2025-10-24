@@ -24,7 +24,7 @@ function App() {
     lat: 35.1697, // 부산 양정인력개발센터 (양정역 인근)
     lng: 129.0704
   });
-  const [locationName, setLocationName] = useState('부산시 연제구');
+  const [locationName, setLocationName] = useState('부산진구 양정동');
 
   // 컴포넌트 마운트 시 실행
   useEffect(() => {
@@ -40,7 +40,7 @@ function App() {
       lng: 129.0704
     };
     setUserLocation(fixedLocation);
-    getAddressFromCoords(fixedLocation.lat, fixedLocation.lng);
+    // getAddressFromCoords(fixedLocation.lat, fixedLocation.lng); // 주석 처리: 초기 state 값 사용
     console.log('📍 고정 위치 사용:', fixedLocation);
   };
 
@@ -176,25 +176,31 @@ const fetchHospitalsData = async () => {
       return getNum(a.distance) - getNum(b.distance);
     });
     
-    // 상위 10개 병원만 카카오 API로 실제 거리 업데이트
-    console.log('🚗 상위 10개 병원 카카오 거리 업데이트 중...');
+    // 상위 10개 병원만 카카오 API로 실제 거리 업데이트 (병렬 호출)
+    console.log('🚗 상위 10개 병원 카카오 거리 업데이트 중 (병렬 호출)...');
+    const top10Hospitals = formattedHospitals.slice(0, 10);
+
     const top10Updated = await Promise.all(
-      formattedHospitals.slice(0, 10).map(async (hospital, index) => {
+      top10Hospitals.map(async (hospital) => {
         try {
           const routeResult = await getHospitalRoute(hospital.id, userLocation);
           if (routeResult?.status === 'success' && routeResult?.data) {
+            console.log(`  ✅ ${hospital.name}: ${routeResult.data.distanceKm}km, ${routeResult.data.durationMin}분`);
             return {
               ...hospital,
               distance: `${routeResult.data.distanceKm}km`,
               driveTime: `${routeResult.data.durationMin}분`
             };
+          } else {
+            console.log(`  ⚠️ ${hospital.name}: API 응답 없음, 직선거리 사용`);
+            return hospital;
           }
         } catch (error) {
-          console.error(`병원 ${hospital.name} 경로 조회 실패`);
+          console.error(`  ❌ ${hospital.name} 경로 조회 실패:`, error.message);
+          return hospital;
         }
-        return hospital;
       })
-    );
+    )
     
     // 업데이트된 상위 10개 + 나머지 병원들 합치기
     const finalHospitals = [

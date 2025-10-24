@@ -29,7 +29,7 @@ const Header = ({ searchTerm, onSearch, onRefresh, onTimeChange, selectedHour, l
       <div className="header-left">
         <div className="logo">🏥 부산 응급실 혼잡도 예측</div>
         <div className="location-info">
-          📍 현재위치: {locationName || '부산시 해운대구 우동'}
+          📍 현재위치: {locationName || '부산진구 양정동'}
         </div>
       </div>
       <div className="header-actions">

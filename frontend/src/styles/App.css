@@ -182,7 +182,7 @@
         }
         
         .marker.green { background: #48bb78; }
-        .marker.yellow { background: #ed8936; }
+        .marker.yellow { background: #fbbf24; }
         .marker.red { background: #f56565; }
         .marker.gray { background: #a0aec0; }
         
@@ -236,20 +236,20 @@
     flex-shrink: 0;
 }
 
-.legend-color.green { 
-    background: #48bb78; 
+.legend-color.green {
+    background: #48bb78;
 }
 
-.legend-color.yellow { 
-    background: #ed8936; 
+.legend-color.yellow {
+    background: #fbbf24;
 }
 
-.legend-color.red { 
-    background: #f56565; 
+.legend-color.red {
+    background: #f56565;
 }
 
-.legend-color.gray { 
-    background: #a0aec0; 
+.legend-color.gray {
+    background: #a0aec0;
 }
 
 /* 반응형 */
@@ -474,7 +474,7 @@
         }
 
         .congestion-indicator.yellow {
-            background: #ed8936;
+            background: #fbbf24;
         }
 
         .congestion-indicator.red {
@@ -717,7 +717,7 @@
         }
 
         .congestion-indicator.yellow {
-            background: #ed8936;
+            background: #fbbf24;
         }
 
         .congestion-indicator.red {
@@ -734,7 +734,7 @@
         }
 
         .status-indicator-large.yellow {
-            background: #ed8936;
+            background: #fbbf24;
         }
 
         .status-indicator-large.red {
