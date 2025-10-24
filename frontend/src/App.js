@@ -229,18 +229,18 @@ const fetchHospitalsData = async () => {
   const handleTimeChange = async (hour) => {
     console.log(`시간 변경: ${hour}시`);
     setSelectedHour(hour);
-    
+
     try {
       setLoading(true);
-      
+
       const response = await fetch(`/api/predictions/hour/${hour}/all`);
       const predictionsData = await response.json();
-      
+
       if (predictionsData.status === 'success') {
         const hospitalsResponse = await getAllHospitals();
         const hospitals = hospitalsResponse.data;
         const predictions = predictionsData.data;
-        
+
         let hospitalData = hospitals.map(hospital => {
           const prediction = predictions.find(p => p.hospitalId === hospital.id);
           return {
@@ -248,17 +248,17 @@ const fetchHospitalsData = async () => {
             prediction: prediction || null
           };
         });
-        
+
         // userLocation 사용
         hospitalData = addDistanceToHospitals(
           hospitalData,
           userLocation.lat,
           userLocation.lng
         );
-        
+
         const formattedHospitals = hospitalData.map(hospital => {
           let congestionColor = 'gray';
-          
+
           if (hospital.prediction && hospital.prediction.congestionLevel) {
             const level = hospital.prediction.congestionLevel;
             if (level === '여유') {
@@ -269,20 +269,20 @@ const fetchHospitalsData = async () => {
               congestionColor = 'red';
             }
           }
-          
+
           return {
             ...hospital,
             congestion: congestionColor,
             status: hospital.prediction?.congestionLevel || '정보없음',
-            waitTime: hospital.prediction?.predictedWaitTime 
-              ? `${hospital.prediction.predictedWaitTime}분` 
+            waitTime: hospital.prediction?.predictedWaitTime
+              ? `${hospital.prediction.predictedWaitTime}분`
               : '정보없음',
             beds: hospital.bedsTotal || 0,
             distance: hospital.distanceText,
             driveTime: hospital.driveTime
           };
         });
-        
+
         setHospitals(formattedHospitals);
         console.log(`${hour}시 데이터 로드 완료`);
       }
@@ -292,7 +292,18 @@ const fetchHospitalsData = async () => {
       setLoading(false);
     }
   };
-  
+
+  // 병원 데이터 로딩 후 현재 시간으로 강제 업데이트
+  useEffect(() => {
+    if (hospitals.length > 0 && !loading) {
+      const currentHour = new Date().getHours();
+      if (selectedHour === currentHour) {
+        console.log('🔄 초기 로딩 완료 - 현재 시간 혼잡도 재조회');
+        handleTimeChange(currentHour);
+      }
+    }
+  }, [hospitals.length]); // hospitals.length만 dependency로 사용하여 무한 루프 방지
+
   // 검색 기능
   const handleSearch = async (term) => {
     setSearchTerm(term);
