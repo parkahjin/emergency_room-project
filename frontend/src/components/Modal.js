@@ -12,7 +12,6 @@ import {
   Filler
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-import { getHospitalRoute } from '../services/api';  // import 추가
 
 // Chart.js 등록
 ChartJS.register(
@@ -30,32 +29,6 @@ const Modal = ({ hospital, isOpen, onClose, onMakeCall, onOpenDirections }) => {
   const [selectedTime, setSelectedTime] = useState('1hour');
   const [chartData, setChartData] = useState(null);
   const [predictions24h, setPredictions24h] = useState([]);
-  const [routeInfo, setRouteInfo] = useState(null);
-
-  // 카카오 경로 정보 가져오기
-  useEffect(() => {
-    const fetchRouteInfo = async () => {
-      if (!hospital?.id) return;
-      
-      try {
-        // 사용자 위치 (양정역)
-        const userLocation = { lat: 35.1697, lng: 129.0704 };
-        const result = await getHospitalRoute(hospital.id, userLocation);
-        
-        console.log('모달 경로 정보:', result);
-        
-        if (result?.status === 'success' && result?.data) {
-          setRouteInfo(result.data);
-        }
-      } catch (error) {
-        console.error('모달 경로 정보 조회 실패:', error);
-      }
-    };
-
-    if (isOpen && hospital) {
-      fetchRouteInfo();
-    }
-  }, [isOpen, hospital?.id]);
 
   // 24시간 예측 데이터 가져오기
   useEffect(() => {
@@ -196,16 +169,9 @@ const Modal = ({ hospital, isOpen, onClose, onMakeCall, onOpenDirections }) => {
                         selectedTime === '2hour' ? 2 : 3;
   const futurePrediction = getFuturePrediction(selectedHours);
 
-  // 실제 표시할 거리와 시간 정보
-  const displayDistance = routeInfo?.distanceKm ? `${routeInfo.distanceKm}km` : (hospital.distance || '계산중...');
-  const displayDuration = routeInfo?.durationMin ? `${routeInfo.durationMin}분` : (hospital.driveTime || '계산중...');
-
-  console.log('모달 표시 정보:', {
-    hospitalName: hospital.name,
-    routeInfo: routeInfo,
-    displayDistance: displayDistance,
-    displayDuration: displayDuration
-  });
+  // 카드와 동일한 거리와 시간 정보 사용
+  const displayDistance = hospital.distance || '정보없음';
+  const displayDuration = hospital.driveTime || '정보없음';
 
   return (
     <div 

@@ -21,8 +21,8 @@ function App() {
   
   // 위치 관련 상태 (양정인력개발센터 고정)
   const [userLocation, setUserLocation] = useState({
-    lat: 35.1697, // 부산 양정인력개발센터 (양정역 인근)
-    lng: 129.0704
+    lat: 35.17048052, // 부산 양정인력개발센터 (중앙대로 900, 양정타임스퀘어빌딩)
+    lng: 129.06967156
   });
   const [locationName, setLocationName] = useState('부산진구 양정동');
 
@@ -36,8 +36,8 @@ function App() {
   // 고정 위치 사용 (부산 양정인력개발센터)
   const getCurrentLocation = () => {
     const fixedLocation = {
-      lat: 35.1697,  // 부산 양정인력개발센터 (양정역 인근)
-      lng: 129.0704
+      lat: 35.17048052,  // 부산 양정인력개발센터 (중앙대로 900, 양정타임스퀘어빌딩)
+      lng: 129.06967156
     };
     setUserLocation(fixedLocation);
     console.log('📍 고정 위치 사용:', fixedLocation);

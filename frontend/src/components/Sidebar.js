@@ -33,18 +33,25 @@ const Sidebar = ({
     if (sortBy === 'distance') {
       // 거리순 정렬
       sorted = hospitalArray.sort((a, b) => {
-        // distance 필드에서 숫자 추출
+        // distance 필드에서 숫자 추출 (km와 m 단위 고려)
         const getNum = (str) => {
-          if (!str || str === '정보없음') return 999;
-          const match = str.match(/[\d.]+/);
-          return match ? parseFloat(match[0]) : 999;
+          if (!str || str === '정보없음') return 999999; // 큰 값으로 변경
+
+          const match = str.match(/([\d.]+)\s*(km|m)/i);
+          if (!match) return 999999;
+
+          const value = parseFloat(match[1]);
+          const unit = match[2].toLowerCase();
+
+          // km는 그대로, m는 km로 변환 (0.6km = 600m)
+          return unit === 'km' ? value : value / 1000;
         };
-        
+
         const distA = getNum(a.distance);
         const distB = getNum(b.distance);
-        
-        console.log(`${a.name}: ${a.distance} (${distA}) vs ${b.name}: ${b.distance} (${distB})`);
-        
+
+        console.log(`${a.name}: ${a.distance} → ${distA}km vs ${b.name}: ${b.distance} → ${distB}km`);
+
         return distA - distB;
       });
       
